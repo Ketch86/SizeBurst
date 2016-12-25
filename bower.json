@@ -1,0 +1,32 @@
+{
+  "name": "SizeBurst",
+  "description": "A minimal Electron application",
+  "main": "app/main.js",
+  "authors": [
+    "GitHub"
+  ],
+  "license": "CC0-1.0",
+  "keywords": [
+    "Electron",
+    "quick",
+    "start",
+    "tutorial",
+    "demo"
+  ],
+  "homepage": "SizeBurst",
+  "moduleType": [],
+  "private": true,
+  "ignore": [
+    "**/.*",
+    "node_modules",
+    "bower_components",
+    "test",
+    "tests"
+  ],
+  "dependencies": {
+    "angular-material": "^1.1.1",
+    "angular-route": "^1.5.8",
+    "d3": "~4.3.0",
+    "angular-d3-sunburst": "*"
+  }
+}

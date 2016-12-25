@@ -1,0 +1,25 @@
+{
+  "name": "SizeBurst",
+  "version": "1.0.0",
+  "description": "A minimal Electron application",
+  "main": "app/main.js",
+  "scripts": {
+    "start": "electron ."
+  },
+  "repository": "",
+  "keywords": [
+    "Electron",
+    "quick",
+    "start",
+    "tutorial",
+    "demo"
+  ],
+  "author": "ketch86",
+  "license": "GNU GENERAL PUBLIC LICENSE",
+  "devDependencies": {
+    "electron": "^1.4.1"
+  },
+  "dependencies": {
+    "promise": "^7.1.1"
+  }
+}
