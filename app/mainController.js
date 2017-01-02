@@ -1,22 +1,9 @@
 var app = angular.module("app")
-app.controller("mainController", ["$scope", "fileService", "Directory", "File", "$timeout", (scope, fs, Directory, File, timeout) => {
+app.controller("mainController", ["$scope", "fileService", "Directory", "File", "FileSet", "$timeout",
+ (scope, fs, Directory, File,FileSet, timeout) => {
     var dirPath="c:\\Users\\Én\\Downloads\\Music\\"; //process.cwd()    
-    scope.test = "(y)";
-    scope.greeting = "Resize the page to see the re-rendering";
-    scope.data = [
-        { name: "Greg", score: 98 },
-        { name: "Ari", score: 96 },
-        { name: 'Q', score: 75 },
-        { name: "Loser", score: 48 }
-    ];
-
-    var addData = function (params) {
-
-    }
-    var count = 0;
+    
     var walkDir = function (dir) {
-        //console.log(count++ + " " + dir.fullPath());
-       // if (dir.fullPath().split("\\").length > 3) return;
         fs.contents(dir.fullPath()).then(contents => {
             fs.stats(contents = contents.map(e => fs.join(dir.fullPath(), e))).then(stats => {
                 stats.forEach(function (stat, i) {
@@ -25,7 +12,7 @@ app.controller("mainController", ["$scope", "fileService", "Directory", "File", 
                         dir.folders.push(sub);
                     } else {
                         var file = new File(contents[i], stat.size, dir);
-                        dir.addFile(file);
+                        dir.files.push(file);
                     }
                 }, this);
                 dir.folders.forEach(function (f) {
@@ -33,7 +20,29 @@ app.controller("mainController", ["$scope", "fileService", "Directory", "File", 
                 }, this);
                 window.refresh = scope.refresh;
                 scope.refresh();
-                //timeout(() => scope.refresh(), 0);
+            });
+        });
+
+    };
+
+    var walkDir2 = function (path) {
+        fs.contents(path).then(contents => {
+            fs.stats(paths = contents.map(name => fs.join(path, name))).then(stats => {
+                stats.forEach(function (stat, i) {
+                    if (stat.isDirectory()) {
+                        var sub = new Directory(paths[i], dir, [], []);
+                        dir.folders.push(sub);
+                    } else {
+                        var file = new File(paths[i], stat.size, dir);
+                        dir.files.push(file);
+                    }
+                }, this);
+                dir.fileSet=new FileSet(dir.files, dir);
+                dir.folders.forEach(function (f) {
+                    walkDir(f);
+                }, this);
+                window.refresh = scope.refresh;
+                scope.refresh();
             });
         });
 

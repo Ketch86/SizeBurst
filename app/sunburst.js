@@ -69,14 +69,14 @@ angular.module("app").directive('sunburst', function () {
                 var data = scope.data;
 
                 root = d3.hierarchy(data, function (d) {
-                    return d.children();
-                }).sum(d => d.size);
+                    return d.children ? d.children() : [];
+                }).sum(d => d.size ? d.size : 0);
                 log(root);
 
                 //root = d3.hierarchy(dummy).sum(d => 1);
 
                 var limitLevel = function (d, limit) {
-                    //d.data.size = d.value;
+                    d.data.size2 = d.value;
                     d.height = Math.min(d.height, limit);
                     if (_.isUndefined(d.children)) {
                         return;
@@ -93,21 +93,20 @@ angular.module("app").directive('sunburst', function () {
 
                 limitLevel(root, 2);
 
-                 data = partition(root);
+                data = partition(root);
 
                 path = svg.selectAll("path");
-                path = path.data(data.descendants(), d => d.data.fullPath());
+                var selUpdate = path.data(data.descendants(), d => d.data.fullPath());
 
-                var selEnter = path.enter();
-                var selExit = path.exit();
-
+                var selEnter = selUpdate.enter();
+                var selExit = selUpdate.exit();
 
                 selEnter.append("path")
                     //.attr("file-path", d => d.data.fullPath()
                     //.attr("display", function (d) { return d.depth ? null : "none"; }) // hide inner ring
                     .attr("id", d => d.data.fullPath())
                     .on("click", click)
-                    .merge(path)
+                    .merge(selUpdate)
                     .attr("d", arc)
                     .style("stroke", "#fff")
                     .style("fill", function (d) { return color((d.children ? d : d.parent).data.name); })
@@ -115,32 +114,58 @@ angular.module("app").directive('sunburst', function () {
                     .each(stash);
 
                 selExit.remove();
-                var text = svg.selectAll("text")
+
+                var textUpdate = svg.selectAll("text")
                     .data(data.descendants(), d => d.data.fullPath());
-                var textEnter = text.enter();
-                // .data(data.descendants().filter(d => d.data instanceof Directory), d => d.data.fullPath())
-                var textPath = textEnter.append("text")
+
+                var textEnter = textUpdate.enter();
+
+                var textEntered = textEnter.append("text")
                     .attr("x", 5) //Move the text from the start angle of the arc
-                    .attr("dy", 18) //Move the text down
-                    .append("textPath")
-                    .attr("xlink:href", d => "#" + d.data.fullPath())
-                    .style("text-anchor", "middle")
-                    .attr("startOffset", "25%");
+                    .attr("dy", 18); //Move the text down
+
+                var textPathUpdate = textUpdate.selectAll("textPath")
+                    .datum(function (d, i) { return this.parentNode.__data__; });
+
+                var tspanUpdate = textPathUpdate
+                    .selectAll("tspan")
+                    .datum(function (d, i) { return this.parentNode.__data__; });
+
+
+                // .text(d => d.data.name + " " + (d.value / 1024).toFixed(0) + " MB");
+
+                var textPathEntered = textEntered.append("textPath")
+                    .attr("xlink:href", d => "#" + d.data.fullPath());
+                //.text(d => d.data.name + " " + (d.value / 1024).toFixed(0) + " MB");
+                // .style("text-anchor", "middle")
+                // .attr("startOffset", "25%");
 
                 //textEnter.exit().remove();
 
-                textPath.append("tspan")
+                textPathEntered.append("tspan")
                     .attr("x", 5) //Move the text from the start angle of the arc
                     .attr("dy", 18) //Move the text down
-                    //.merge(text)
-                    .text(function (d) { return d.data.name; });
+                    .classed("name", true)
+                    .text(function (d) {
+                        return d.data.name;
+                    });
 
+                var scaleSize = function (size, iteration = 0) {
+                    if (size < 1024) {
+                        var units = ["byte", "kB", "MB", "GB", "PB"];
+                        var unit = units[iteration];
+                        return size.toFixed(1) + " " + unit;
+                    }
+                    return scaleSize(size / 1024, ++iteration);
+                };
 
-                textPath.append("tspan")
+                tspanUpdate.filter(".size").text(d => scaleSize(d.value));
+
+                textPathEntered.append("tspan")
                     .attr("x", 5) //Move the text from the start angle of the arc
                     .attr("dy", 18) //Move the text down
-                    //.merge(text)
-                    .text(function (d) { return d.value; });
+                    .classed("size", true)
+                    .text(d => scaleSize(d.value));
             };
 
             scope.refresh = _.throttle(refresh, 200);
@@ -178,10 +203,7 @@ angular.module("app").directive('sunburst', function () {
                     // single argument t and returns a number between the starting angle and the
                     // ending angle. When t = 0, it returns d.endAngle; when t = 1, it returns
                     // newAngle; and for 0 < t < 1 it returns an angle in-between.
-                    if (a == d) {
-                        log("d.x1", d.x1, "a.x1", a.x1);
-                    }
-                    const curr = _.pick(d, ["x0", "x1", "y0", "y1", "x0_orig", "x1_orig", "y0_orig", "y1_orig"]);
+                    const curr = _.pick(d, ["x0", "x1", "y0", "y1", "x0_orig", "x1_orig", "y0_orig", "y1_orig", "value"]);
                     const orig = revert(_.clone(curr));
                     var interpolate = d3.interpolate(orig, d);
 
@@ -204,9 +226,6 @@ angular.module("app").directive('sunburst', function () {
                         // with its appearance. Whenever we start a new arc transition, the
                         // correct starting angle can be inferred from the data.
                         const iData = interpolate(t);
-                        if (a == d) {
-                            log("t:", t, "i:", _.pick(iData, ["x0", "x1", "y0", "y1"]));
-                        }
 
                         // Lastly, compute the arc path given the updated data! In effect, this
                         // transition uses data-space interpolation: the data is interpolated

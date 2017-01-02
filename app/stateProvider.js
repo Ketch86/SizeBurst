@@ -3,7 +3,7 @@ angular.module("app")
         this.$get = [function stateFactory() {
             return {
                 state:{
-                    
+                    tree
                 }
             };
         }];

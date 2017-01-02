@@ -2,7 +2,7 @@ angular.module('app')
     .factory('Directory', ["fileService", "FileSet",
         function (fs, FileSet) {
             var id = 0;
-            var Directory = function (path, parent, files, folders) {
+            var Directory = function (path, parent, files = [], folders = []) {
                 this.id = id++;
                 this.name = fs.pUtil.basename(path);
                 this.path = fs.pUtil.dirname(path);
@@ -16,20 +16,20 @@ angular.module('app')
                 return fs.pUtil.join(this.path, this.name);
             };
 
-            Directory.prototype.children = function () {
+            Directory.prototype.children2 = function () {
                 var concat = _.isUndefined(this.fileSet) ? [] : [this.fileSet];
                 //  concat=this.files;
                 return this.folders.concat(concat);
             };
 
-            Directory.prototype.children2 = function () {
-                var concat = _.isUndefined(this.fileSet) ? [] : [this.fileSet];
-                return this.folders.concat(concat);
+            Directory.prototype.children = function () {
+                var fileSet = new FileSet(this.files, this);
+                return this.folders.concat([fileSet]);
             };
 
             Directory.prototype.addFile = function (file) {
                 this.files.push(file);
-                this.fileSet=new FileSet(this.files);                
+                this.fileSet = new FileSet(this.files);
             };
 
 
@@ -64,17 +64,17 @@ angular.module('app')
     .factory('FileSet', ["fileService",
         function (fs) {
             var id = 0;
-            var FileSet = function (files) {
+            var FileSet = function (files, parent) {
                 this.id = id++;
-                this.path = files[0].path;
+                this.path = parent.fullPath();
                 this.name = files.length + " files";
-                this.parent = files[0].parent;
+                this.parent = parent;
                 this.files = files;
-                this.size = files.reduce((accum, file) => { file.size + accum }, 0);
+                this.size = files.reduce((accum, file) => file.size + accum, 0);
             };
 
             FileSet.prototype.fullPath = function () {
-                return fs.pUtil.join(this.path, this.id+"");
+                return fs.pUtil.join(this.path, this.id + "");
             };
 
             FileSet.prototype.children = function () {
