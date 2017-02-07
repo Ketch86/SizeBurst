@@ -8,13 +8,29 @@
 </head>
 
 <body ng-controller="mainController">
-  <sunburst data="hierarchy" refresh="refresh"></sunburst>
-  <h1>Hello World!</h1>
-  <h2>{{1+1}}</h2>
-  <h2>{{test}}</h2>
-  <!-- All of the Node.js APIs are available in this renderer process. -->
-  We are using node
-  <script>document.write(process.versions.node)</script>, Chromium
+  <button ng-click="wd1()">walkdir1</button>
+  <button ng-click="wd2()">walkdir2</button>
+  <button ng-click="wdMain()">walkdir Main</button>
+  <div style="float: right">
+<label>Path <input type="text" ng-model="path"></label>
+<div><label>History 
+      <ul>
+        <li ng-repeat="p in paths" ng-click="$parent.path=p">{{p}}</li>
+      </ul>
+    </label>
+    </div>
+</div>
+<div><label>Elements <span>{{elementCount}}</span></label></div>
+<div><label>Duration <span>{{duration}}</span></label></div>
+<div><label>In progress calls <span>{{asyncCount}}</span></label></div>
+<div><label>Size <span>{{size}}</span></label></div>
+<sunburst data="root" id="path" value="size" refresh="refresh"></sunburst>
+<h1>Hello World!</h1>
+<h2>{{1+1}}</h2>
+<h2>{{test}}</h2>
+<!-- All of the Node.js APIs are available in this renderer process. -->
+We are using node
+<script>document.write(process.versions.node)</script>, Chromium
 <script>document.write(process.versions.chrome)</script>, and Electron
 <script>document.write(process.versions.electron)</script>.
 <d3-bars data="data"></d3-bars>

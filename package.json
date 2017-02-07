@@ -4,7 +4,8 @@
   "description": "A minimal Electron application",
   "main": "app/main.js",
   "scripts": {
-    "start": "electron ."
+    "start": "electron .",
+    "debug": "electron . --debug-brk=5858 --enable-logging"    
   },
   "repository": "",
   "keywords": [

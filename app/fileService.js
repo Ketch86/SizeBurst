@@ -34,7 +34,7 @@ angular.module('app')
                             var files = [];
 
                             contents.forEach(element => {
-                                fs.stat(pUtil.join(path, element), (err, stats) => {
+                                fs.stat(path + element, (err, stats) => {
                                     if (stats.isFile()) {
                                         files.push(element);
                                     }
@@ -54,7 +54,7 @@ angular.module('app')
                             var dirs = [];
 
                             contents.forEach(element => {
-                                fs.stat(pUtil.join(path, element), (err, stats) => {
+                                fs.stat(path + element, (err, stats) => {
                                     if (stats.isDirectory()) {
                                         dirs.push(element);
                                     }

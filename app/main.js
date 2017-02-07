@@ -2,6 +2,7 @@ const electron = require('electron')
 const ipcMain = electron.ipcMain
 // Module to control application life.
 const app = electron.app
+global.tree = { test: "test" };
 // Module to create native browser window.
 const BrowserWindow = electron.BrowserWindow
 
@@ -14,14 +15,15 @@ const util = require('util');
 const path = require('path')
 const url = require('url')
 
-
 // Keep a global reference of the window object, if you don't, the window will
 // be closed automatically when the JavaScript object is garbage collected.
 let mainWindow
+let calcWindow
 
 function createWindow() {
   // Create the browser window.
-  mainWindow = new BrowserWindow({ width: 800, height: 600 })
+  mainWindow = new BrowserWindow({ width: 800, height: 600, autoHideMenuBar: true })
+  calcWindow = new BrowserWindow({ width: 800, height: 600, autoHideMenuBar: true })
 
   // and load the index.html of the app.
   mainWindow.loadURL(url.format({
@@ -30,8 +32,15 @@ function createWindow() {
     slashes: true
   }))
 
+  calcWindow.loadURL(url.format({
+    pathname: path.join(__dirname, 'calc/calc.html'),
+    protocol: 'file:',
+    slashes: true
+  }))
+
   // Open the DevTools.
   mainWindow.webContents.openDevTools()
+  calcWindow.webContents.openDevTools()
 
   // Emitted when the window is closed.
   mainWindow.on('closed', function () {
@@ -39,15 +48,17 @@ function createWindow() {
     // in an array if your app supports multi windows, this is the time
     // when you should delete the corresponding element.
     mainWindow = null
+    calcWindow = null;
   })
 }
 
-ipcMain.on('asynchronous-message', (event, arg) => {
-  console.log(arg)  // prints "ping"
-  var p = calcDirSize(".");
-  p.then(res => event.sender.send('asynchronous-reply', res));
+ipcMain.on('walk', (event, arg) => {
+  calcWindow.webContents.send("path", arg);
+});
 
-})
+ipcMain.on('data', (event, arg) => {
+  mainWindow.webContents.send('data', arg);
+});
 
 function calcDirSize(path) {
   var size = 0;
@@ -55,27 +66,39 @@ function calcDirSize(path) {
   var promise = new Promise(function (resolve, reject) {
     fs.readdir(path, (err, files) => {
       var returnedCount = 0;
-      console.log('files: ' + files.length);
-
       files.forEach(f => {
         fs.stat(path + "/" + f, (err, stats) => {
           size += stats.size
-          console.log('stat: ' + util.inspect(stats));
-          console.log('returnedCount: ' + returnedCount);
           if (++returnedCount == files.length) {
             resolve(size);
           }
         })
-        console.log('stat...');
       })
     })
-    console.log('readdir...');
-
   });
-  console.log('Promise created');
-
   return promise;
 }
+
+var elementCount = 0;
+function calcDirSize2(path) {
+  var size = 0;
+  //mainWindow.webContents.send('elementCount', elementCount);
+  fs.readdir(path, (err, files) => {
+    files.forEach(f => {
+      var fullPath = path + "\\" + f;
+      fs.stat(fullPath, (err, stats) => {
+        elementCount++;
+        size += stats.size;
+        if (stats.isDirectory()) {
+          calcDirSize2(fullPath);
+        }
+      })
+    })
+  });
+
+  return;
+}
+
 
 ipcMain.on('synchronous-message', (event, arg) => {
   console.log(arg)  // prints "ping"

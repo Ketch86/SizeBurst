@@ -2,15 +2,23 @@ angular.module("app").directive('sunburst', function () {
     return {
         scope: {
             data: '=data',
-            refresh: '='
+            refresh: '=',
+            id: "@",
+            name: "@",
+            value: "@"
         },
         restrict: 'E',
         controller: ["$scope", "$element", "Directory", function (scope, $element, Directory) {
-            const log = (...args) => console.log(...args);
-            var width = 650,
-                height = 650,
+            scope.name = scope.name || "name";
+            scope.id = scope.id || "id";
+            scope.value = scope.value || "value";
+
+            const log = (...args) => { };//console.log(...args);
+            var width = 600,
+                height = 600,
                 radius = Math.min(width, height) / 2,
-                color = d3.scaleOrdinal(d3.schemeCategory20c);
+                color = d3.scaleOrdinal(d3.schemeCategory20c)
+            rootPath = "";
 
             var x = d3.scaleLinear()
                 .range([0, 2 * Math.PI]);
@@ -41,6 +49,8 @@ angular.module("app").directive('sunburst', function () {
             // var data = partition(root);
             // var path = svg.datum(root).selectAll("path");
             window.refreshCount = 0;
+            var store = window.store = {};
+            var refreshRate = 3000;
             var refresh = () => {
                 // console.log(path);
                 // console.log(selEnter);
@@ -64,13 +74,22 @@ angular.module("app").directive('sunburst', function () {
                 }, this);
                 console.log(window.refreshCount++);
 
+                var selectPath = (root, path) => {
+                    var path = rootPath.split("\\");
+                    _.forEach(path, p => {
+                        if (p.length > 0) {
+                            root = _.find(root.children, child => child.path == root.path + "\\" + p);
+                        }
+                    });
 
+                    return root;
+                };
 
-                var data = scope.data;
+                var data = selectPath(scope.data, rootPath);
 
-                root = d3.hierarchy(data, function (d) {
-                    return d.children ? d.children() : [];
-                }).sum(d => d.size ? d.size : 0);
+                root = d3.hierarchy(data, d => d.children || [])
+                    .sum(d => d[scope.value] || 0)
+                    .sort(function (a, b) { return b.value - a.value; });
                 log(root);
 
                 //root = d3.hierarchy(dummy).sum(d => 1);
@@ -93,30 +112,60 @@ angular.module("app").directive('sunburst', function () {
 
                 limitLevel(root, 2);
 
+                var groupUndersizedItems = function (d, limit) {
+                    if (_.isUndefined(d.children)) {
+                        return;
+                    }
+                    else {
+                        var undersized = _.remove(d.children, child => child.value < limit);
+                        if (!_.isEmpty(undersized)) {
+                            var aggregate = _.reduce(undersized, (aggregate, element) => {
+                                aggregate.children = _.concat(aggregate.children, element.children);
+                                aggregate.value += element.value;
+                                return aggregate;
+                            }, { path: d.data[scope.id] + "#aggregate", name: "aggr", value: 0, children: [] });
+                            d.children.push(aggregate);
+                        }
+                        _.forEach(d.children, child => groupUndersizedItems(child, limit));
+                    }
+                };
+
+                //groupUndersizedItems(root, root.value / 10);
+
                 data = partition(root);
 
-                path = svg.selectAll("path");
-                var selUpdate = path.data(data.descendants(), d => d.data.fullPath());
+                path = svg.selectAll("path").each(stash());
+                var selUpdate = path.data(data.descendants(), d => d.data[scope.id]);
 
                 var selEnter = selUpdate.enter();
                 var selExit = selUpdate.exit();
 
-                selEnter.append("path")
-                    //.attr("file-path", d => d.data.fullPath()
+                //selUpdate.each(stash());
+                selEnter.each(stash(0));
+
+                var paths = selEnter.append("path")
+                    //.attr("file-path", d => d.data[scope.id]
                     //.attr("display", function (d) { return d.depth ? null : "none"; }) // hide inner ring
-                    .attr("id", d => d.data.fullPath())
+                    .attr("id", d => d.data[scope.id])
                     .on("click", click)
                     .merge(selUpdate)
-                    .attr("d", arc)
                     .style("stroke", "#fff")
-                    .style("fill", function (d) { return color((d.children ? d : d.parent).data.name); })
+                    .style("fill", function (d) { return color((d.children ? d : d.parent).data[scope.name]); })
                     .style("fill-rule", "evenodd")
-                    .each(stash);
-
+                    .transition()
+                    .duration(window.duration || 1500)
+                    .attrTween("d", d => arcTween(d));
+                
+                if (!_.isUndefined(window.duration) && window.duration != 0) {
+                    paths.delay((d, i) => i * window.delay);
+                }
+                
                 selExit.remove();
 
                 var textUpdate = svg.selectAll("text")
-                    .data(data.descendants(), d => d.data.fullPath());
+                    .data(data.descendants(), d => d.data[scope.id]);
+
+                textUpdate.exit().remove();
 
                 var textEnter = textUpdate.enter();
 
@@ -132,11 +181,11 @@ angular.module("app").directive('sunburst', function () {
                     .datum(function (d, i) { return this.parentNode.__data__; });
 
 
-                // .text(d => d.data.name + " " + (d.value / 1024).toFixed(0) + " MB");
+                // .text(d => d.data[scope.name] + " " + (d.value / 1024).toFixed(0) + " MB");
 
                 var textPathEntered = textEntered.append("textPath")
-                    .attr("xlink:href", d => "#" + d.data.fullPath());
-                //.text(d => d.data.name + " " + (d.value / 1024).toFixed(0) + " MB");
+                    .attr("xlink:href", d => "#" + d.data[scope.id]);
+                //.text(d => d.data[scope.name] + " " + (d.value / 1024).toFixed(0) + " MB");
                 // .style("text-anchor", "middle")
                 // .attr("startOffset", "25%");
 
@@ -147,7 +196,7 @@ angular.module("app").directive('sunburst', function () {
                     .attr("dy", 18) //Move the text down
                     .classed("name", true)
                     .text(function (d) {
-                        return d.data.name;
+                        return d.data[scope.name];
                     });
 
                 var scaleSize = function (size, iteration = 0) {
@@ -166,74 +215,89 @@ angular.module("app").directive('sunburst', function () {
                     .attr("dy", 18) //Move the text down
                     .classed("size", true)
                     .text(d => scaleSize(d.value));
+
+                var spans = document.querySelectorAll("tspan");
+                _.forEach(spans, span => {
+                    var length = span.getComputedTextLength();
+                    var id = _.trimStart(span.parentElement.getAttribute("href"), "#");
+                    var path = document.getElementById(id);
+                    var pathSeg = path.getPathSegAtLength(length);
+                    if (pathSeg != 1 || span.__data__.value == 0) {
+                        span.style.display = "none";
+                    }
+                    else {
+                        span.style.display = "block";
+                    }
+                }
+                );
+
             };
 
-            scope.refresh = _.throttle(refresh, 200);
+            scope.refresh = _.throttle(refresh, refreshRate);
 
             // Stash the old values for transition.
-            function stash(d) {
-                d.x0_orig = d.x0;
-                d.x1_orig = d.x1;
-                d.y0_orig = d.y0;
-                d.y1_orig = d.y1;
+            function stash(value) {
+                return function (d) {
+                    var props = ["x0", "x1", "y0", "y1"];
+                    if (_.isUndefined(value)) {
+                        store[d.data[scope.id]] = _.pick(d, props);
+                    }
+                    else {
+                        store[d.data[scope.id]] = _.zipObject(props, _.fill(new Array(props.length), value));
+                        // store[d.data[scope.id]].x0 = _.isUndefined(value) ? d.x0 : value;
+                        // store[d.data[scope.id]].x1 = _.isUndefined(value) ? d.x1 : value;
+                        // store[d.data[scope.id]].y0 = _.isUndefined(value) ? d.y0 : value;
+                        // store[d.data[scope.id]].y1 = _.isUndefined(value) ? d.y1 : value;
+                    }
+
+                };
             }
 
             function revert(d) {
-                d.x0 = d.x0_orig;
-                d.x1 = d.x1_orig;
-                d.y0 = d.y0_orig;
-                d.y1 = d.y1_orig;
+                _.assign(d, store[d.data[scope.id]]);
 
                 return d;
             }
 
-            function arcTween(a) {
+            function arcTween(d) {
 
-                // The function passed to attrTween is invoked for each selected element when
-                // the transition starts, and for each element returns the interpolator to use
-                // over the course of transition. This function is thus responsible for
-                // determining the starting angle of the transition (which is pulled from the
-                // element’s bound datum, d.endAngle), and the ending angle (simply the
-                // newAngle argument to the enclosing function).
-                return function (d) {
+                // To interpolate between the two angles, we use the default d3.interpolate.
+                // (Internally, this maps to d3.interpolateNumber, since both of the
+                // arguments to d3.interpolate are numbers.) The returned function takes a
+                // single argument t and returns a number between the starting angle and the
+                // ending angle. When t = 0, it returns d.endAngle; when t = 1, it returns
+                // newAngle; and for 0 < t < 1 it returns an angle in-between.
+                var props = ["x0", "x1", "y0", "y1"];
+                const curr = d;
+                const orig = revert(_.clone(curr));
+                var interpolate = d3.interpolate(_.pick(orig, props), _.pick(curr, props));
 
-                    // To interpolate between the two angles, we use the default d3.interpolate.
-                    // (Internally, this maps to d3.interpolateNumber, since both of the
-                    // arguments to d3.interpolate are numbers.) The returned function takes a
-                    // single argument t and returns a number between the starting angle and the
-                    // ending angle. When t = 0, it returns d.endAngle; when t = 1, it returns
-                    // newAngle; and for 0 < t < 1 it returns an angle in-between.
-                    const curr = _.pick(d, ["x0", "x1", "y0", "y1", "x0_orig", "x1_orig", "y0_orig", "y1_orig", "value"]);
-                    const orig = revert(_.clone(curr));
-                    var interpolate = d3.interpolate(orig, d);
+                // The return value of the attrTween is also a function: the function that
+                // we want to run for each tick of the transition. Because we used
+                // attrTween("d"), the return value of this last function will be set to the
+                // "d" attribute at every tick. (It’s also possible to use transition.tween
+                // to run arbitrary code for every tick, say if you want to set multiple
+                // attributes from a single function.) The argument t ranges from 0, at the
+                // start of the transition, to 1, at the end.
+                return function (t) {
 
-                    // The return value of the attrTween is also a function: the function that
-                    // we want to run for each tick of the transition. Because we used
-                    // attrTween("d"), the return value of this last function will be set to the
-                    // "d" attribute at every tick. (It’s also possible to use transition.tween
-                    // to run arbitrary code for every tick, say if you want to set multiple
-                    // attributes from a single function.) The argument t ranges from 0, at the
-                    // start of the transition, to 1, at the end.
-                    return function (t) {
-
-                        // Calculate the current arc angle based on the transition time, t. Since
-                        // the t for the transition and the t for the interpolate both range from
-                        // 0 to 1, we can pass t directly to the interpolator.
-                        //
-                        // Note that the interpolated angle is written into the element’s bound
-                        // data object! This is important: it means that if the transition were
-                        // interrupted, the data bound to the element would still be consistent
-                        // with its appearance. Whenever we start a new arc transition, the
-                        // correct starting angle can be inferred from the data.
-                        const iData = interpolate(t);
-
-                        // Lastly, compute the arc path given the updated data! In effect, this
-                        // transition uses data-space interpolation: the data is interpolated
-                        // (that is, the end angle) rather than the path string itself.
-                        // Interpolating the angles in polar coordinates, rather than the raw path
-                        // string, produces valid intermediate arcs during the transition.
-                        return arc(iData);
-                    };
+                    // Calculate the current arc angle based on the transition time, t. Since
+                    // the t for the transition and the t for the interpolate both range from
+                    // 0 to 1, we can pass t directly to the interpolator.
+                    //
+                    // Note that the interpolated angle is written into the element’s bound
+                    // data object! This is important: it means that if the transition were
+                    // interrupted, the data bound to the element would still be consistent
+                    // with its appearance. Whenever we start a new arc transition, the
+                    // correct starting angle can be inferred from the data.
+                    const iData = interpolate(t);
+                    console.log(t)
+                    // Lastly, compute the arc path given the updated data! In effect, this
+                    // transition uses data-space interpolation: the data is interpolated
+                    // (that is, the end angle) rather than the path string itself.
+                    // Interpolating the angles in polar coordinates, rather than the raw path
+                    // string, produces valid intermediate arcs during the transition.
+                    return arc(iData);
                 };
             }
 
@@ -250,14 +314,13 @@ angular.module("app").directive('sunburst', function () {
 
             d3.select(self.frameElement).style("height", height + "px");
             function click(d) {
-                log(d.x1);
-                d.x1 *= .8;
-                log(d.x1);
-
-                svg.transition()
-                    .duration(2000)
-                    .selectAll("path")
-                    .attrTween("d", arcTween(d));
+                if (d.depth == 0) {
+                    rootPath = rootPath.slice(0, rootPath.lastIndexOf("\\"));
+                }
+                else {
+                    rootPath = d.data.path.slice(scope.data.path.length);
+                }
+                scope.refresh();
             }
 
         }]

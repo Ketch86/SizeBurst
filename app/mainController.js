@@ -1,60 +1,111 @@
 var app = angular.module("app")
-app.controller("mainController", ["$scope", "fileService", "Directory", "File", "FileSet", "$timeout",
- (scope, fs, Directory, File,FileSet, timeout) => {
-    var dirPath="c:\\Users\\Én\\Downloads\\Music\\"; //process.cwd()    
-    
-    var walkDir = function (dir) {
-        fs.contents(dir.fullPath()).then(contents => {
-            fs.stats(contents = contents.map(e => fs.join(dir.fullPath(), e))).then(stats => {
-                stats.forEach(function (stat, i) {
-                    if (stat.isDirectory()) {
-                        var sub = new Directory(contents[i], dir, [], []);
-                        dir.folders.push(sub);
-                    } else {
-                        var file = new File(contents[i], stat.size, dir);
-                        dir.files.push(file);
-                    }
-                }, this);
-                dir.folders.forEach(function (f) {
-                    walkDir(f);
-                }, this);
-                window.refresh = scope.refresh;
-                scope.refresh();
-            });
+app.controller("mainController", ["$scope", "fileService", "Directory", "File", "FileSet", "$timeout", "$interval",
+    (scope, fs, Directory, File, FileSet, timeout, interval) => {
+        var separator = ",";
+        var prefix = "path";
+        var idKeyPostfix = "IDs"
+
+        var storePath = path => {
+            if (scope.paths.includes(path)) return;
+            var ids = localStorage.getItem(prefix + idKeyPostfix);
+            ids = ids || "";
+
+            var maxId = _.max(ids.split(separator).slice(1).map(id => parseInt(id)));
+            var nextId = (maxId || 0) + 1;
+            localStorage.setItem(prefix + nextId, path);
+            ids += "," + nextId;
+            localStorage.setItem(prefix + idKeyPostfix, ids);
+            scope.paths.push(path);
+        };
+        var loadPaths = () => {
+            var ids = localStorage.getItem(prefix + idKeyPostfix);
+            ids = ids || "";
+            idList = ids.split(separator).slice(1).map(id => parseInt(id));
+
+            scope.paths = idList.map(id => localStorage.getItem(prefix + id));
+        };
+        loadPaths();
+
+        var setProperty = target => {
+            var target = target;
+            return prop => {
+                var prop = prop;
+                return value => { target[prop] = value.toLocaleString(); scope.$apply(); };
+            };
+        };
+
+        var setElementCount = setProperty(scope)("elementCount");
+
+        var {ipcRenderer, remote} = require('electron');
+        var main = remote.require("./main.js");
+        var tree = remote.getGlobal("tree");
+
+        var countLeafs = (root) => {
+            var ret = 0;
+            if (_.isArray(root.children)) {
+                children.forEach(function (child) {
+                    ret += countLeafs(child);
+                }, this);;
+            }
+            else {
+                ret = 1;
+            }
+            return ret;
+        };
+
+        ipcRenderer.on('data', (event, arg) => {
+            window.tree = arg;
+            scope.root = arg;
+            reduceFiles(arg);
+            scope.$apply();
+            scope.refresh();
         });
 
-    };
-
-    var walkDir2 = function (path) {
-        fs.contents(path).then(contents => {
-            fs.stats(paths = contents.map(name => fs.join(path, name))).then(stats => {
-                stats.forEach(function (stat, i) {
-                    if (stat.isDirectory()) {
-                        var sub = new Directory(paths[i], dir, [], []);
-                        dir.folders.push(sub);
-                    } else {
-                        var file = new File(paths[i], stat.size, dir);
-                        dir.files.push(file);
-                    }
-                }, this);
-                dir.fileSet=new FileSet(dir.files, dir);
-                dir.folders.forEach(function (f) {
-                    walkDir(f);
-                }, this);
-                window.refresh = scope.refresh;
-                scope.refresh();
+        function reduceFiles(dir) {
+            var dirs = [];
+            var files = [];
+            dir.name = fs.pUtil.basename(dir.path);
+            _.forEach(dir.children, child => {
+                if (_.isArray(child.children)) {                    
+                    dirs.push(child);
+                }
+                else {
+                    files.push(child);
+                }
             });
-        });
 
-    };
+            if (files.length > 0) {
+                var fileSet = _.reduce(files, (set, file) => {
+                    set.count++;
+                    set.size += file.size;
+                    set.name = set.count + " files";
+                    return set;
+                }, { count: 0, size: 0, path: dir.path + "#files", name: "0 files" });
 
-    var getHierarchy = function (path, depth) {
-        var root = new Directory(path, null, [], []);
-        var hierarchy = root;
-        walkDir(root);
-        return window.hierarchy = hierarchy;
-    };
+                dir.children = dirs.concat([fileSet]);
+            }
 
-    scope.hierarchy = getHierarchy(dirPath);
-    console.log(scope.hierarchy);
-}])
+            _.forEach(dirs, reduceFiles);
+        };
+        window.scope = scope;
+
+        scope.wdMain = () => {
+            scope.path = _.trim(scope.path, "\\");
+            if (!_.includes(scope.paths, scope.path)) {
+                storePath(scope.path);
+            }
+            ipcRenderer.send('walk', scope.path);
+        };
+    }]);
+
+     // var setProperty = target => {
+        //     var target = target;
+        //     return prop => {
+        //         var prop = prop;
+        //         return value => { target[prop] = value.toLocaleString(); scope.$apply(); };
+        //     };
+        // };
+
+        // var setElementCount = setProperty(scope)("elementCount");
+        // var setDuration = setProperty(scope)("duration");
+        // var setAsyncCount = setProperty(scope)("asyncCount");

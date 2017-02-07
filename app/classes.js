@@ -13,7 +13,7 @@ angular.module('app')
             };
 
             Directory.prototype.fullPath = function () {
-                return fs.pUtil.join(this.path, this.name);
+                return this.path + "\\" + this.name;
             };
 
             Directory.prototype.children2 = function () {
@@ -49,7 +49,7 @@ angular.module('app')
             };
 
             File.prototype.fullPath = function () {
-                return fs.pUtil.join(this.path, this.name);
+                return this.path + "\\" + this.name;
             };
 
             File.prototype.children = function () {
@@ -74,7 +74,7 @@ angular.module('app')
             };
 
             FileSet.prototype.fullPath = function () {
-                return fs.pUtil.join(this.path, this.id + "");
+                return this.path + "\\" + "fileSet";
             };
 
             FileSet.prototype.children = function () {
