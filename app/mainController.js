@@ -66,7 +66,7 @@ app.controller("mainController", ["$scope", "fileService", "Directory", "File", 
             var files = [];
             dir.name = fs.pUtil.basename(dir.path);
             _.forEach(dir.children, child => {
-                if (_.isArray(child.children)) {                    
+                if (_.isArray(child.children)) {
                     dirs.push(child);
                 }
                 else {

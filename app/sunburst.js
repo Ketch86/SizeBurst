@@ -14,6 +14,15 @@ angular.module("app").directive('sunburst', function () {
             scope.value = scope.value || "value";
 
             const log = (...args) => { };//console.log(...args);
+            var scaleSize = function (size, iteration = 0) {
+                if (size < 1024) {
+                    var units = ["byte", "kB", "MB", "GB", "PB"];
+                    var unit = units[iteration];
+                    return size.toFixed(1) + " " + unit;
+                }
+                return scaleSize(size / 1024, ++iteration);
+            };
+
             var width = 600,
                 height = 600,
                 radius = Math.min(width, height) / 2,
@@ -31,6 +40,25 @@ angular.module("app").directive('sunburst', function () {
                 .attr("height", height)
                 .append("g")
                 .attr("transform", "translate(" + width / 2 + "," + height * .5 + ")");
+
+            var centerText = d3.select("svg").append("g")
+                .attr("transform", "translate(" + width / 2 + "," + height * .5 + ")").append("text")
+                //.attr("transform", "translate(" + width / 2 + "," + height * .5 + ")")
+                .attr("font-size", "20px")
+                .attr("text-anchor", "middle")
+                .classed("center", true);
+
+            var setCenterText = lines => {
+                centerText.html("");
+                _.forEach(lines, (line, i) => {
+                    centerText.append("tspan")
+                        .attr("x", 0)
+                        .attr("dy", () => i == 0 ? 0 : 20)
+                        .text(line)
+                        .classed("center", true);
+                });
+            }
+            window.setCenterText = setCenterText;
 
             var partition = d3.partition()
                 .size([2 * Math.PI, radius * radius])
@@ -72,6 +100,7 @@ angular.module("app").directive('sunburst', function () {
                         element.name = "unoka" + i + "_" + ii;
                     }, this);
                 }, this);
+
                 console.log(window.refreshCount++);
 
                 var selectPath = (root, path) => {
@@ -112,25 +141,38 @@ angular.module("app").directive('sunburst', function () {
 
                 limitLevel(root, 2);
 
-                var groupUndersizedItems = function (d, limit) {
-                    if (_.isUndefined(d.children)) {
-                        return;
-                    }
-                    else {
-                        var undersized = _.remove(d.children, child => child.value < limit);
-                        if (!_.isEmpty(undersized)) {
-                            var aggregate = _.reduce(undersized, (aggregate, element) => {
-                                aggregate.children = _.concat(aggregate.children, element.children);
-                                aggregate.value += element.value;
-                                return aggregate;
-                            }, { path: d.data[scope.id] + "#aggregate", name: "aggr", value: 0, children: [] });
-                            d.children.push(aggregate);
+                var groupUndersizedItems = function (root, limit) {
+                    root.each(n => {
+                        if (n.value < limit) {
+                            _.remove(n.parent.children, n);
+                            var aggr = _.find(n.parent.children, child => child.data.path.endsWith("#aggregate"));
+                            if (_.isUndefined(aggr)) {
+                                var data = {
+                                    name: "aggr",
+                                    path: n.parent.data.path + "#aggregate"
+                                };
+                                aggr = n.copy();
+                                aggr.data = data;
+                                aggr.value = 0;
+                                aggr.children = null;
+                                aggr.parent = n.parent;
+                                n.parent.children.push(aggr);
+                            }
+                            aggr.value += n.value;
+                            if (_.isArray(n.children)) {
+                                if (!_.isArray(aggr.children)) {
+                                    aggr.children = [];
+                                }
+                                _.forEach(n.children, child => {
+                                    child.parent = aggr;
+                                    aggr.children.push(child);
+                                });
+                            }
                         }
-                        _.forEach(d.children, child => groupUndersizedItems(child, limit));
-                    }
+                    });
                 };
 
-                //groupUndersizedItems(root, root.value / 10);
+                groupUndersizedItems(root, root.value / (window.proportion || 12));
 
                 data = partition(root);
 
@@ -142,12 +184,14 @@ angular.module("app").directive('sunburst', function () {
 
                 //selUpdate.each(stash());
                 selEnter.each(stash(0));
-
+                var count = 0;
                 var paths = selEnter.append("path")
                     //.attr("file-path", d => d.data[scope.id]
                     //.attr("display", function (d) { return d.depth ? null : "none"; }) // hide inner ring
                     .attr("id", d => d.data[scope.id])
                     .on("click", click)
+                    .on("mouseover", onmouseover)
+                    .on("mouseout", onmouseout)
                     .merge(selUpdate)
                     .style("stroke", "#fff")
                     .style("fill", function (d) { return color((d.children ? d : d.parent).data[scope.name]); })
@@ -155,14 +199,33 @@ angular.module("app").directive('sunburst', function () {
                     .transition()
                     .duration(window.duration || 1500)
                     .attrTween("d", d => arcTween(d));
-                
-                if (!_.isUndefined(window.duration) && window.duration != 0) {
-                    paths.delay((d, i) => i * window.delay);
+
+                paths.on("end", () => {
+                    if (++count == paths.size()) {
+                        var spans = document.querySelectorAll("tspan:not(.center)");
+                        _.forEach(spans, span => {
+                            span.style.display = "block";
+                            var length = span.getComputedTextLength();
+                            var id = _.trimStart(span.parentElement.getAttribute("href"), "#");
+                            var path = document.getElementById(id);
+                            var pathSeg = path.getPathSegAtLength(length);
+                            if (pathSeg != 1 || span.__data__.value == 0) {
+                                span.style.display = "none";
+                            }
+                            else {
+                            }
+                        });
+                    }
+                });
+
+                if (!_.isUndefined(window.delay) && window.delay != 0) {
+                    paths.size();
+                    paths.delay((d, i) => (paths.size() - i) * window.delay);
                 }
-                
+
                 selExit.remove();
 
-                var textUpdate = svg.selectAll("text")
+                var textUpdate = svg.selectAll("text.arc-text")
                     .data(data.descendants(), d => d.data[scope.id]);
 
                 textUpdate.exit().remove();
@@ -171,7 +234,8 @@ angular.module("app").directive('sunburst', function () {
 
                 var textEntered = textEnter.append("text")
                     .attr("x", 5) //Move the text from the start angle of the arc
-                    .attr("dy", 18); //Move the text down
+                    .attr("dy", 18)
+                    .classed("arc-text", true); //Move the text down
 
                 var textPathUpdate = textUpdate.selectAll("textPath")
                     .datum(function (d, i) { return this.parentNode.__data__; });
@@ -194,43 +258,20 @@ angular.module("app").directive('sunburst', function () {
                 textPathEntered.append("tspan")
                     .attr("x", 5) //Move the text from the start angle of the arc
                     .attr("dy", 18) //Move the text down
+                    .style("display", "none")
                     .classed("name", true)
                     .text(function (d) {
                         return d.data[scope.name];
                     });
-
-                var scaleSize = function (size, iteration = 0) {
-                    if (size < 1024) {
-                        var units = ["byte", "kB", "MB", "GB", "PB"];
-                        var unit = units[iteration];
-                        return size.toFixed(1) + " " + unit;
-                    }
-                    return scaleSize(size / 1024, ++iteration);
-                };
 
                 tspanUpdate.filter(".size").text(d => scaleSize(d.value));
 
                 textPathEntered.append("tspan")
                     .attr("x", 5) //Move the text from the start angle of the arc
                     .attr("dy", 18) //Move the text down
+                    .style("display", "none")
                     .classed("size", true)
                     .text(d => scaleSize(d.value));
-
-                var spans = document.querySelectorAll("tspan");
-                _.forEach(spans, span => {
-                    var length = span.getComputedTextLength();
-                    var id = _.trimStart(span.parentElement.getAttribute("href"), "#");
-                    var path = document.getElementById(id);
-                    var pathSeg = path.getPathSegAtLength(length);
-                    if (pathSeg != 1 || span.__data__.value == 0) {
-                        span.style.display = "none";
-                    }
-                    else {
-                        span.style.display = "block";
-                    }
-                }
-                );
-
             };
 
             scope.refresh = _.throttle(refresh, refreshRate);
@@ -291,7 +332,7 @@ angular.module("app").directive('sunburst', function () {
                     // with its appearance. Whenever we start a new arc transition, the
                     // correct starting angle can be inferred from the data.
                     const iData = interpolate(t);
-                    console.log(t)
+                    //console.log(t)
                     // Lastly, compute the arc path given the updated data! In effect, this
                     // transition uses data-space interpolation: the data is interpolated
                     // (that is, the end angle) rather than the path string itself.
@@ -321,6 +362,14 @@ angular.module("app").directive('sunburst', function () {
                     rootPath = d.data.path.slice(scope.data.path.length);
                 }
                 scope.refresh();
+            }
+
+            function onmouseover(d) {
+                setCenterText([d.data.name, scaleSize(d.value)]);
+            }
+
+            function onmouseout(d) {
+                setCenterText([]);
             }
 
         }]
