@@ -4,6 +4,7 @@ app.controller("mainController", ["$scope", "fileService", "Directory", "File", 
         var separator = ",";
         var prefix = "path";
         var idKeyPostfix = "IDs"
+        window.config = scope.config = { level: 2, ratio: 0.05, delay: 30, duration: 800, durationCoefficient: 1 };
 
         var storePath = path => {
             if (scope.paths.includes(path)) return;
@@ -37,6 +38,7 @@ app.controller("mainController", ["$scope", "fileService", "Directory", "File", 
         var setElementCount = setProperty(scope)("elementCount");
 
         var {ipcRenderer, remote} = require('electron');
+        const dialog = remote.require('electron').dialog;
         var main = remote.require("./main.js");
         var tree = remote.getGlobal("tree");
 
@@ -89,13 +91,23 @@ app.controller("mainController", ["$scope", "fileService", "Directory", "File", 
         };
         window.scope = scope;
 
-        scope.wdMain = () => {
+        scope.walkDir = () => {
             scope.path = _.trim(scope.path, "\\");
             if (!_.includes(scope.paths, scope.path)) {
                 storePath(scope.path);
             }
             ipcRenderer.send('walk', scope.path);
         };
+
+        scope.selectDirectory = function () {
+            scope.path = dialog.showOpenDialog({
+                properties: ['openDirectory']
+            })[0];
+        }
+
+        scope.queryPaths = function (search) {
+            return _.filter(scope.paths, p => p.toLowerCase().includes(search.toLowerCase()));
+        }
     }]);
 
      // var setProperty = target => {

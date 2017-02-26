@@ -5,7 +5,8 @@ angular.module("app").directive('sunburst', function () {
             refresh: '=',
             id: "@",
             name: "@",
-            value: "@"
+            value: "@",
+            config: "="
         },
         restrict: 'E',
         controller: ["$scope", "$element", "Directory", function (scope, $element, Directory) {
@@ -23,8 +24,8 @@ angular.module("app").directive('sunburst', function () {
                 return scaleSize(size / 1024, ++iteration);
             };
 
-            var width = 600,
-                height = 600,
+            var width = 700,
+                height = 700,
                 radius = Math.min(width, height) / 2,
                 color = d3.scaleOrdinal(d3.schemeCategory20c)
             rootPath = "";
@@ -139,7 +140,7 @@ angular.module("app").directive('sunburst', function () {
                     }
                 };
 
-                limitLevel(root, 2);
+                limitLevel(root, scope.config.level);
 
                 var groupUndersizedItems = function (root, limit) {
                     root.each(n => {
@@ -172,7 +173,9 @@ angular.module("app").directive('sunburst', function () {
                     });
                 };
 
-                groupUndersizedItems(root, root.value / (window.proportion || 12));
+                if (scope.config.ratio != 0) {
+                    groupUndersizedItems(root, root.value * scope.config.ratio);
+                }
 
                 data = partition(root);
 
@@ -197,7 +200,7 @@ angular.module("app").directive('sunburst', function () {
                     .style("fill", function (d) { return color((d.children ? d : d.parent).data[scope.name]); })
                     .style("fill-rule", "evenodd")
                     .transition()
-                    .duration(window.duration || 1500)
+                    .duration((d, i) => Math.pow(scope.config.durationCoefficient, (d.height + 1)) * scope.config.duration)
                     .attrTween("d", d => arcTween(d));
 
                 paths.on("end", () => {
@@ -218,9 +221,15 @@ angular.module("app").directive('sunburst', function () {
                     }
                 });
 
-                if (!_.isUndefined(window.delay) && window.delay != 0) {
+                if (!_.isUndefined(scope.config.delay) && scope.config.delay != 0) {
                     paths.size();
-                    paths.delay((d, i) => (paths.size() - i) * window.delay);
+                    paths.delay((d, i) => {
+                        var offset = 0;
+                        if (!_.isNull(d.parent)) {
+                            offset = d.parent.children.indexOf(d) - i;
+                        }
+                        return scope.config.delay * i + offset + d.height * scope.config.delay //((d.height % 2 * path.size()) + (d.height % 2 * -2 + 1) * i
+                    });
                 }
 
                 selExit.remove();

@@ -4,47 +4,58 @@
 <head>
   <meta charset="UTF-8">
   <title>Hello World!</title>
-  <link href="../bower_components/angular-d3-sunburst/angular-d3-sunburst.css" rel="stylesheet" type="text/css" />
+  <link href="../bower_components/angular-material/angular-material.min.css" rel="stylesheet" type="text/css" />
 </head>
 
 <body ng-controller="mainController">
-  <button ng-click="wd1()">walkdir1</button>
-  <button ng-click="wd2()">walkdir2</button>
-  <button ng-click="wdMain()">walkdir Main</button>
-  <div style="float: right">
-<label>Path <input type="text" ng-model="path"></label>
-<div><label>History 
-      <ul>
-        <li ng-repeat="p in paths" ng-click="$parent.path=p">{{p}}</li>
-      </ul>
-    </label>
+  <div layout="row">
+    <div flex md-colors="{background: 'background-700'}">
+      <sunburst data="root" id="path" value="size" refresh="refresh" config="config"></sunburst>
     </div>
-</div>
-<div><label>Elements <span>{{elementCount}}</span></label></div>
-<div><label>Duration <span>{{duration}}</span></label></div>
-<div><label>In progress calls <span>{{asyncCount}}</span></label></div>
-<div><label>Size <span>{{size}}</span></label></div>
-<sunburst data="root" id="path" value="size" refresh="refresh"></sunburst>
-<h1>Hello World!</h1>
-<h2>{{1+1}}</h2>
-<h2>{{test}}</h2>
-<!-- All of the Node.js APIs are available in this renderer process. -->
-We are using node
-<script>document.write(process.versions.node)</script>, Chromium
-<script>document.write(process.versions.chrome)</script>, and Electron
-<script>document.write(process.versions.electron)</script>.
-<d3-bars data="data"></d3-bars>
-</body>
+    <div flex="none" style="width: 400px;">
+      <md-autocomplete md-items="p in queryPaths(path)" md-search-text="path" placeholder="Select a directory">
+        <md-item-template>
+          <div style="line-height: initial">
+            <div>{{ p.substring(p.lastIndexOf('\\') + 1) }}</div>
+            <small class="md-caption">{{p}}</small>
+          </div>
+        </md-item-template>
+      </md-autocomplete>
+      <div layout="row" layout-align="center center">
+      <md-button class="md-raised md-primary" ng-click="selectDirectory()">Browse</md-button>
+      <md-button class="md-raised" ng-click="walkDir()" ng-disabled="!path">Calculate</md-button>
+      </div>
+       <md-divider></md-divider>
+      <div layout="row">
+        <md-input-container flex="20">
+          <label>Level</label>
+          <input type="number" step="1" ng-model="config.level" min="1" />
+        </md-input-container>
+        <md-input-container flex="20">
+          <label>Duration</label>
+          <input type="number" step="100" ng-model="config.duration" />
+        </md-input-container>
+        <md-input-container flex="20">
+          <label>Delay</label>
+          <input type="number" step="10" ng-model="config.delay" min="0" />
+        </md-input-container>
+        <md-input-container flex="20">
+          <label>Ratio</label>
+          <input flex type="number" ng-model="config.ratio" min="0" max="0.2" step="0.005">
+        </md-input-container>
+        <md-input-container flex="20">
+          <label>Coefficient</label>
+          <input flex type="number" ng-model="config.durationCoefficient" min="0.5" max="1.5" step="0.05">
+        </md-input-container>
+      </div>
+      <div><span md-ink-ripple="#FF0000">Elements </span><span>{{elementCount}}</span></div>
+      <div><span>Duration </span><span>{{duration}}</span></div>
+      <div><span>In progress calls </span><span>{{asyncCount}}</span></div>
+      <div><span>Size </span><span>{{size}}</span></div>
+    </div>
+  </div>
 
-<script>
-        window._ = require('../bower_components/lodash/dist/lodash.js')
-        require('../bower_components/angular/angular.js')
-        window.d3 = require('../bower_components/d3/d3.js')
-        require('./ngApp.js')
-        require('./classes.js')
-        require('./fileService.js')
-        require('./sunburst.js')
-        require('./mainController.js')
-</script>
+  <script src="./scripts.js"></script>
+</body>
 
 </html>
